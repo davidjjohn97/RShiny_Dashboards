@@ -1,0 +1,265 @@
+---
+title: "  **Craiglist-Used_Cars-Analysis**"
+output: pdf_document
+header-includes:
+  - \usepackage{fancyhdr}
+  - \usepackage{setspace}\spacing{1.5}
+  - \usepackage{titling}
+  - \posttitle{\end{center}}
+  - \usepackage{sectsty} \sectionfont{\emph}
+---
+\begin{centering}
+\vspace{1cm}
+\large
+{\bf Submitted By : David Joseph Johnson } \\
+\vspace{.75cm}
+{\bf 02/20/2022 } \\
+\end{centering}
+\newpage
+\tableofcontents
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Craigslist is an American classified advertisement website with sections for jobs, gigs, housing, vehicles etc. for sale. The dataset used here is scraped from data collected specifically from the used vehicle's sections of Craigslist.
+
+## SOURCE
+The Dataset was retrieved from Kaggle (online community for Data Science Enthusiasts).
+
+## DASHBOARD
+The aim of the dashboard is to provide an interactive aid to compare the vehicles listed on Craigslist.
+The dashboard consists of 2 different visualizations interactive visualizations:
+• Vehicle Count by Manufacturer: Shows popular brands in the used vehicle sales
+• Price Variation Based on Type: Shows average resale price based on the type of the car.
+Filters Transmission and Fuel can be toggled to view respective results
+
+
+
+# Code
+
+## Invoking Required Libraries
+```{r , echo=FALSE ,results='hide', warning=FALSE, message=FALSE}
+### Install ISLR Package which contains the College Dataset
+### Invoke Packages
+library(shiny)
+library(shinydashboard)
+library(DataExplorer)
+library(scales)
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(dplyr)
+library(janitor)
+library(tidyr)
+library(RColorBrewer)
+library(car)
+library(psych)
+library(imputeTS)
+library(corrplot)
+```
+
+## Importing Dataset
+```{r }
+raw_df <- read.csv("vehicles.csv",header = TRUE)
+```
+
+## Data Cleaning
+```{r , echo=FALSE ,results='hide', warning=FALSE, message=FALSE}
+df<- raw_df
+df<-clean_names(df)
+df<- subset(df,select=- c(url,cylinders,drive,description,size,vin,lat,long,region_url,image_url))
+df<-df %>% remove_empty(which = c("rows"))
+df<-df %>% remove_empty(which = c("cols"))
+df<-na.omit(df)
+df<- df[!(is.na(df$paint_color) | df$paint_color==""),]
+df<- df[!(is.na(df$type) | df$type==""),]
+df<- df[!(is.na(df$id) | df$id==""),]
+df<- df[!(is.na(df$region) | df$region==""),]
+df<- df[!(is.na(df$price) | df$price==""),]
+df<- df[!(is.na(df$year) | df$year==""),]
+df<- df[!(is.na(df$manufacturer) | df$manufacturer==""),]
+df<- df[!(is.na(df$model) | df$model==""),]
+df<- df[!(is.na(df$condition) | df$condition==""),]
+df<- df[!(is.na(df$fuel) | df$fuel==""),]
+df<- df[!(is.na(df$odometer) | df$odometer==""),]
+df<- df[!(is.na(df$title_status) | df$title_status==""),]
+df<- df[!(is.na(df$transmission) | df$transmission==""),]
+df<- df[!(is.na(df$type) | df$type==""),]
+df<- df[!(is.na(df$paint_color) | df$paint_color==""),]
+df<- df[!(is.na(df$state) | df$state==""),]
+df<- df[!(is.na(df$posting_date) | df$posting_date==""),]
+df<- df[order(df$posting_date),]
+df<- df %>% top_n(-10000)
+```
+
+\newpage
+
+## RShiny Dashboard
+
+```{r }
+# Uncomment next line to import Cleaned Dataset directly to skip data cleaning process and start dashboard using this single chunk of code
+ df <- read.csv("cleaned_vehicles.csv",header = TRUE)
+#Set Dashboard Title
+header <- dashboardHeader(title = "Quote Right", titleWidth=150)  
+
+#Sidebar content of the dashboard
+sidebar <- dashboardSidebar(
+  sidebarMenu(
+    menuItem("Overview", tabName = "dashboard", icon = icon("glyphicon glyphicon-list",lib='glyphicon')
+             )
+    )
+  )
+  
+flash_cards <- fluidRow(valueBoxOutput("card1"),valueBoxOutput("card2"),valueBoxOutput("card3"))
+
+
+graphs <- fluidRow(
+  box(
+    title = "Vehicle Count By Manufacturer"
+    ,status = "primary"
+    ,solidHeader = TRUE 
+    ,collapsible = TRUE 
+    ,plotOutput("manufacturer_count", height = "700px", width = "580px")
+  ),
+  
+  #Filters using radio buttons
+  box(
+    title = "Filters"
+    ,status = "primary"
+    ,solidHeader = TRUE 
+    ,collapsible = TRUE 
+    ,radioButtons("x", "TRANSMISSION",
+                 list("All"='a', "Automatic"='b', "Manual"='c'), inline=T),
+    
+    radioButtons("y", "FUEL",
+                 list("All"='d', "Gas"='e', "Diesel"='f'), inline=T), height = "170px"
+    ),
+
+  
+  box(
+    title = "Average Price By Type"
+    ,status = "primary"
+    ,solidHeader = TRUE 
+    ,collapsible = TRUE 
+    ,plotOutput("vehicle_type", height = "510px",width = "580px")
+  )
+)
+
+
+# Combining Fluid rows into the dashboard body
+body <- dashboardBody(flash_cards, graphs)
+
+# Dashboard Page UI
+ui <- dashboardPage(title = 'Quote Right Dashboard', header, sidebar, body, skin='blue')
+
+# Creating server to facilitate functions in UI 
+server <- shinyServer(function(input, output) { 
+  
+
+  # Extracting Unique Manufacturers
+  total.manufacturers <- length(unique(df$manufacturer))
+  # Flashcard1: Total Unique Manufacturers
+  output$card1 <- renderValueBox({
+    valueBox(
+      formatC(total.manufacturers, format="d", big.mark=',')
+      ,'Total Number of Manufacturers'
+      ,icon = icon("fa-solid fa-car")
+      ,color = "light-blue")
+  })
+  
+  # Computing Average Price
+  average.pricing <- mean(df$price)
+  # Flashcard2: Average Price
+  output$card2 <- renderValueBox({
+    valueBox(
+      formatC(average.pricing, format="d", big.mark=',')
+      ,'Average Price'
+      ,icon = icon("glyphicon glyphicon-usd",lib='glyphicon')
+      ,color = "light-blue")
+  })
+  
+  # Computing Average Odometer
+  average.odometer <- mean(df$odometer)
+  # Flashcard3: Average Odometer
+  output$card3 <- renderValueBox({
+    valueBox(
+      formatC(average.odometer, format="d", big.mark=',')
+      ,'Average Odometer'
+      ,icon = icon("glyphicon glyphicon-road",lib='glyphicon')
+      ,color = "light-blue")
+  })
+  
+
+    filtered_df <- df
+  
+# Barplot of Count of Vehicles by Manufacturers
+  output$manufacturer_count <- renderPlot({
+    filtered_df <- df
+     if(req(input$x)=='b'){
+      filtered_df <- filter(df, transmission == "automatic")
+    }
+    if(req(input$x)=='c'){
+      filtered_df <- filter(df, transmission == "manual")
+    }
+    if(req(input$y)=='e'){
+     filtered_df <- filter(filtered_df, fuel == "gas")
+    }
+    if(req(input$y)=='f'){
+      filtered_df <- filter(filtered_df, fuel == "diesel")
+    }
+  ggplot(filtered_df, aes(x = forcats::fct_rev(forcats::fct_infreq(manufacturer)))) +
+  theme(axis.text.x = element_text(face="bold", color="black", 
+                           size=10),
+          axis.text.y = element_text(face="bold", color="black", 
+                           size=10)) + 
+  theme(plot.caption = element_text(hjust = 0.1)) + 
+  geom_text(aes(label = ..count..), stat = "count", hjust = -0.1,size=4, colour = "black") + 
+  geom_bar(fill="lightblue")  + ylim(0, 1100) +  ylab("Count") + 
+      xlab("Manufacturer")+
+  coord_flip()
+})
+  
+  # Barplot of Average Price By Type
+  output$vehicle_type <- renderPlot({
+    filtered_df <- df
+    if(req(input$x)=='b'){
+      filtered_df <- filter(df, transmission == "automatic")
+    }
+    if(req(input$x)=='c'){
+      filtered_df <- filter(df, transmission == "manual")
+    }
+    if(req(input$y)=='e'){
+     filtered_df <- filter(filtered_df, fuel == "gas")
+    }
+    if(req(input$y)=='f'){
+      filtered_df <- filter(filtered_df, fuel == "diesel")
+    }
+    
+  ggplot(filtered_df, aes(x = forcats::fct_rev(forcats::fct_infreq(type))),y= mean(price)) +
+  theme(axis.text.x = element_text(face="bold", color="black", 
+                           size=10,angle = 45),
+          axis.text.y = element_text(face="bold", color="black", 
+                           size=10)) + 
+  theme(plot.caption = element_text(hjust = 0.1)) + 
+  geom_text(aes(label = ..count..), stat = "count", vjust = -1,size=4, colour = "black") + 
+  geom_bar(fill="lightblue")  + ylim(0, 2700) +  ylab("Average Price ($)") + 
+      xlab("Type")
+})
+}
+)
+shinyApp(ui, server)
+```
+
+
+
+# References
+
+* https://cran.r-project.org/web/packages/shinydashboard/shinydashboard.pdf
+
+* ggplot2, R., DuBois, C., Chang, J., & Pauloo, R. (2009). Rotating and spacing axis labels in ggplot2. Retrieved 20 February 2022, from https://stackoverflow.com/questions/1330989/rotating-and-spacing-axis-labels-in-ggplot2
+
+* Shiny?, H. (2018). How to extract the values of dynamically generated inputs in Shiny?. Retrieved 20 February 2022, from https://stackoverflow.com/questions/50795355/how-to-extract-the-values-of-dynamically-generated-inputs-in-shiny
